@@ -1,0 +1,388 @@
+[
+  {
+    "table_name": "account",
+    "description": "Contains information about each account, including its creation date, location, and frequency of statement issuance.",
+    "summary": "This table holds the primary details for each bank account. Key fields include the unique `account_id`, the `district_id` linking to the branch's location, and the `frequency` of statement generation which can be monthly, weekly, or after a transaction.",
+    "columns": [
+      {
+        "name": "account_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "The ID of the account."
+      },
+      {
+        "name": "date",
+        "type": "DATE",
+        "constraints": null,
+        "description": "The creation date of the account in the form YYMMDD."
+      },
+      {
+        "name": "district_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Location of the branch, foreign key to the district table."
+      },
+      {
+        "name": "frequency",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Frequency of account statement issuance. 'POPLATEK MESICNE' stands for monthly issuance, 'POPLATEK TYDNE' stands for weekly issuance, 'POPLATEK PO OBRATU' stands for issuance after a transaction."
+      }
+    ]
+  },
+  {
+    "table_name": "card",
+    "description": "Details about credit cards issued to clients, including card type and issue date.",
+    "summary": "This table lists all credit cards associated with dispositions. Each card is identified by `card_id` and linked to a disposition via `disp_id`. The `type` column categorizes the card ('junior', 'classic', 'gold'), and `issued` tracks the issuance date.",
+    "columns": [
+      {
+        "name": "card_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "ID number of the credit card."
+      },
+      {
+        "name": "disp_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Disposition ID, foreign key to the disposition table."
+      },
+      {
+        "name": "type",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Type of credit card: 'junior', 'classic', or 'gold'."
+      },
+      {
+        "name": "issued",
+        "type": "DATE",
+        "constraints": null,
+        "description": "The date when the credit card was issued in the form YYMMDD."
+      }
+    ]
+  },
+  {
+    "table_name": "client",
+    "description": "Contains personal information about the bank's clients.",
+    "summary": "This table stores demographic information for each client, identified by `client_id`. It includes `gender`, `birth_date`, and the `district_id` for their location.",
+    "columns": [
+      {
+        "name": "client_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "The unique number for the client."
+      },
+      {
+        "name": "gender",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Gender of the client: 'F' for female, 'M' for male."
+      },
+      {
+        "name": "birth_date",
+        "type": "DATE",
+        "constraints": null,
+        "description": "The birth date of the client."
+      },
+      {
+        "name": "district_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Location of the branch, foreign key to the district table."
+      }
+    ]
+  },
+  {
+    "table_name": "disposition",
+    "description": "Links clients to accounts and specifies their rights (e.g., owner, disponent).",
+    "summary": "This table acts as a mapping between clients and their accounts, using `disp_id` as the unique key. It links `client_id` to `account_id` and defines the client's role through the `type` column ('OWNER', 'DISPONENT').",
+    "columns": [
+      {
+        "name": "disp_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Unique number identifying this row of the record."
+      },
+      {
+        "name": "client_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "ID number of the client, foreign key to the client table."
+      },
+      {
+        "name": "account_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "ID number of the account, foreign key to the account table."
+      },
+      {
+        "name": "type",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Type of disposition. 'OWNER' or 'DISPONENT'. A DISPONENT can issue permanent orders or apply for loans."
+      }
+    ]
+  },
+  {
+    "table_name": "district",
+    "description": "Provides demographic and economic statistics for different districts.",
+    "summary": "This table contains socio-economic data for each district, identified by `district_id`. It includes information like `district_name`, `region`, population statistics, `average_salary`, `unemployment_rate`, and crime statistics for 1995 and 1996.",
+    "columns": [
+      {
+        "name": "district_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Unique identifier for the district."
+      },
+      {
+        "name": "district_name",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Name of the district."
+      },
+      {
+        "name": "region",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "The region the district belongs to."
+      },
+      {
+        "name": "number_of_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "Total number of inhabitants in the district."
+      },
+      {
+        "name": "municipalities_lt_499_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "Number of municipalities with inhabitants fewer than 499."
+      },
+      {
+        "name": "municipalities_500_to_1999_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "Number of municipalities with inhabitants between 500 and 1999."
+      },
+      {
+        "name": "municipalities_2000_to_9999_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "Number of municipalities with inhabitants between 2000 and 9999."
+      },
+      {
+        "name": "municipalities_gt_10000_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "Number of municipalities with inhabitants greater than 10000."
+      },
+      {
+        "name": "cities",
+        "type": "INT",
+        "constraints": null,
+        "description": "Number of cities in the district."
+      },
+      {
+        "name": "ratio_of_urban_inhabitants",
+        "type": "REAL",
+        "constraints": null,
+        "description": "The ratio of urban inhabitants in the district."
+      },
+      {
+        "name": "average_salary",
+        "type": "INT",
+        "constraints": null,
+        "description": "The average salary in the district."
+      },
+      {
+        "name": "unemployment_rate_95",
+        "type": "REAL",
+        "constraints": null,
+        "description": "The unemployment rate in 1995."
+      },
+      {
+        "name": "unemployment_rate_96",
+        "type": "REAL",
+        "constraints": null,
+        "description": "The unemployment rate in 1996."
+      },
+      {
+        "name": "entrepreneurs_per_1000_inhabitants",
+        "type": "INT",
+        "constraints": null,
+        "description": "The number of entrepreneurs per 1000 inhabitants."
+      },
+      {
+        "name": "committed_crimes_95",
+        "type": "INT",
+        "constraints": null,
+        "description": "The number of committed crimes in 1995."
+      },
+      {
+        "name": "committed_crimes_96",
+        "type": "INT",
+        "constraints": null,
+        "description": "The number of committed crimes in 1996."
+      }
+    ]
+  },
+  {
+    "table_name": "loan",
+    "description": "Contains information about approved loans for accounts.",
+    "summary": "This table tracks all loans issued, identified by `loan_id`. It links to an `account_id` and details the loan's `amount`, `duration` in months, monthly `payments`, and its current `status` (e.g., finished, running, in debt).",
+    "columns": [
+      {
+        "name": "loan_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "The ID number identifying the loan data."
+      },
+      {
+        "name": "account_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "The ID number identifying the account, foreign key to the account table."
+      },
+      {
+        "name": "date",
+        "type": "DATE",
+        "constraints": null,
+        "description": "The date when the loan was approved."
+      },
+      {
+        "name": "amount",
+        "type": "INT",
+        "constraints": null,
+        "description": "Approved loan amount in US dollars."
+      },
+      {
+        "name": "duration",
+        "type": "INT",
+        "constraints": null,
+        "description": "Loan duration in months."
+      },
+      {
+        "name": "payments",
+        "type": "REAL",
+        "constraints": null,
+        "description": "Monthly payment amount in US dollars."
+      },
+      {
+        "name": "status",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Repayment status: 'A' for contract finished, no problems; 'B' for contract finished, loan not paid; 'C' for running contract, OK so far; 'D' for running contract, client in debt."
+      }
+    ]
+  },
+  {
+    "table_name": "perm_order",
+    "description": "Contains information about permanent (standing) orders from accounts.",
+    "summary": "This table logs standing orders, identified by `order_id`. Each order is linked to an `account_id` and specifies the recipient's bank (`bank_to`) and account (`account_to`), the `amount`, and the purpose of the payment (`k_symbol`).",
+    "columns": [
+      {
+        "name": "order_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Unique identifier for the order."
+      },
+      {
+        "name": "account_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "ID number of the account, foreign key to the account table."
+      },
+      {
+        "name": "bank_to",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Bank of the recipient. Each bank has a unique two-letter code."
+      },
+      {
+        "name": "account_to",
+        "type": "INT",
+        "constraints": null,
+        "description": "Account number of the recipient."
+      },
+      {
+        "name": "amount",
+        "type": "REAL",
+        "constraints": null,
+        "description": "Debited amount."
+      },
+      {
+        "name": "k_symbol",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Characterization of the payment: 'POJISTNE' for insurance payment, 'SIPO' for household payment, 'LEASING' for leasing, 'UVER' for loan payment."
+      }
+    ]
+  },
+  {
+    "table_name": "transaction",
+    "description": "Records all transactions for accounts.",
+    "summary": "This table provides a detailed log of all transactions, each identified by `trans_id`. It includes the `account_id`, `date`, `type` (credit/withdrawal), `operation` mode, `amount`, and the resulting `balance`. It also characterizes the transaction's purpose via `k_symbol`.",
+    "columns": [
+      {
+        "name": "trans_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "Transaction ID."
+      },
+      {
+        "name": "account_id",
+        "type": "INT",
+        "constraints": null,
+        "description": "ID number of the account, foreign key to the account table."
+      },
+      {
+        "name": "date",
+        "type": "DATE",
+        "constraints": null,
+        "description": "Date of the transaction."
+      },
+      {
+        "name": "type",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Type of transaction: 'PRIJEM' for credit, 'VYDAJ' for withdrawal."
+      },
+      {
+        "name": "operation",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Mode of transaction: 'VYBER KARTOU' for credit card withdrawal, 'VKLAD' for credit in cash, 'PREVOD Z UCTU' for collection from another bank, 'VYBER' for withdrawal in cash, 'PREVOD NA UCET' for remittance to another bank."
+      },
+      {
+        "name": "amount",
+        "type": "INT",
+        "constraints": null,
+        "description": "Amount of money in USD."
+      },
+      {
+        "name": "balance",
+        "type": "INT",
+        "constraints": null,
+        "description": "Balance after the transaction in USD."
+      },
+      {
+        "name": "k_symbol",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Characterization of the transaction: 'POJISTNE' for insurance payment, 'SLUZBY' for payment for statement, 'UROK' for interest credited, 'SANKC. UROK' for sanction interest on a negative balance, 'SIPO' for household, 'DUCHOD' for old-age pension, 'UVER' for loan payment."
+      },
+      {
+        "name": "bank",
+        "type": "TEXT",
+        "constraints": null,
+        "description": "Bank of the transaction partner. Each bank has a unique two-letter code."
+      },
+      {
+        "name": "account",
+        "type": "INT",
+        "constraints": null,
+        "description": "Account of the transaction partner."
+      }
+    ]
+  }
+]

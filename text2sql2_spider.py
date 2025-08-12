@@ -2,12 +2,15 @@ import weaviate
 import json
 import os
 import re
+import time
+import pandas as pd
+from datetime import datetime
 from dotenv import load_dotenv
 
 try:
     from langchain_openai import AzureChatOpenAI
 except ImportError:
-    raise ImportError("langchain is not installed. Please install it with 'pip install langchain'.")
+    raise ImportError("langchain is not installed. Please install it with 'pip install langchain langchain-community'.")
 
 # --- Load environment variables and Constants ---
 load_dotenv()
@@ -41,7 +44,6 @@ def init_clients():
         max_tokens=1000,
         openai_api_key=openai_api_key, # type: ignore
         azure_endpoint="https://nextiva.openai.azure.com/",
-        streaming=True,
     )
     return client, llm
 
@@ -122,7 +124,7 @@ def extract_used_schema(model, question, tables, return_prompt=False):
     metadata_map = {json.loads(t['metadata_information'])['table_name']: json.loads(t['metadata_information']) for t in tables}
     if not metadata_map: 
         if return_prompt:
-            return [], ""
+            return [], "", {}
         return []
     schema = "\n\n".join([create_ddl_from_metadata(table) for table in metadata_map.values()])
     prompt = f"""
@@ -135,20 +137,32 @@ def extract_used_schema(model, question, tables, return_prompt=False):
         Return a JSON object with a single key \"tables\", which is a list of objects, each with \"table_name\" and a \"columns\" list.
         Example: {{"tables": [{{"table_name": "employees", "columns": ["employee_id", "status"]}}]}}
     """
+    
+    # Get response and track token usage
     response = model.invoke(prompt)
+    
+    # Extract token info from response metadata
+    token_info = {}
+    if hasattr(response, 'usage_metadata') and response.usage_metadata:
+        token_info = {
+            "prompt_tokens": response.usage_metadata.get('input_tokens', 0),
+            "completion_tokens": response.usage_metadata.get('output_tokens', 0),
+            "total_tokens": response.usage_metadata.get('input_tokens', 0) + response.usage_metadata.get('output_tokens', 0)
+        }
+    
     match = re.search(r'{.*}', response.content, re.DOTALL)
     if match:
         try: 
             tables = json.loads(match.group())['tables']
             if return_prompt:
-                return tables, prompt
+                return tables, prompt, token_info
             return tables
         except (json.JSONDecodeError, KeyError): 
             if return_prompt:
-                return [], prompt
+                return [], prompt, token_info
             return []
     if return_prompt:
-        return [], prompt
+        return [], prompt, token_info
     return []
 
 def generate_sql(model, question, filtered_schema, all_tables_metadata, return_prompt=False):
@@ -173,16 +187,98 @@ def generate_sql(model, question, filtered_schema, all_tables_metadata, return_p
         {schema_ddl}
         SQL Query:
     """
+    
+    # Get response and track token usage
     response = model.invoke(prompt)
+    
+    # Extract token info from response metadata
+    token_info = {}
+    if hasattr(response, 'usage_metadata') and response.usage_metadata:
+        token_info = {
+            "prompt_tokens": response.usage_metadata.get('input_tokens', 0),
+            "completion_tokens": response.usage_metadata.get('output_tokens', 0),
+            "total_tokens": response.usage_metadata.get('input_tokens', 0) + response.usage_metadata.get('output_tokens', 0)
+        }
+    
     if return_prompt:
-        return clean_sql_query(response.content), prompt
+        return clean_sql_query(response.content), prompt, token_info
     return clean_sql_query(response.content)
+
+def extract_database_names(tables_metadata):
+    """Extract unique database names from the tables metadata"""
+    db_names = set()
+    for table in tables_metadata:
+        meta = json.loads(table['metadata_information'])
+        # Assuming database name is part of table name or we use a default
+        # You might need to adjust this based on your actual schema
+        table_name = meta.get('table_name', '')
+        # If table names have database prefix like 'db_name.table_name'
+        if '.' in table_name:
+            db_name = table_name.split('.')[0]
+            db_names.add(db_name)
+        else:
+            # Otherwise, we might infer from the metadata or use a default
+            db_names.add('spider_db')  # Default database name
+    
+    return ', '.join(sorted(db_names)) if db_names else 'unknown'
+
+def append_to_excel(excel_filename, instance_metrics):
+    """Append a single row to the Excel file efficiently"""
+    # Read existing data
+    df = pd.read_excel(excel_filename)
+    
+    # Append new row
+    new_row = pd.DataFrame([instance_metrics])
+    df = pd.concat([df, new_row], ignore_index=True)
+    
+    # Write back with formatting
+    with pd.ExcelWriter(excel_filename, engine='openpyxl', mode='w') as writer:
+        df.to_excel(writer, sheet_name='Metrics', index=False)
+        
+        # Auto-adjust column widths for better readability
+        worksheet = writer.sheets['Metrics']
+        for column in worksheet.columns:
+            max_length = 0
+            column_cells = [cell for cell in column]
+            for cell in column_cells:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+            worksheet.column_dimensions[column_cells[0].column_letter].width = adjusted_width
 
 if __name__ == "__main__":
     # Read the spider_natural_queries.jsonl file
     input_jsonl = "spider_natural_queries.jsonl"
     output_dir = "spider_sqls"
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_filename = f"spider_sql_generation_metrics_{timestamp}.xlsx"
+    
+    # Initialize Excel file with headers
+    initial_data = pd.DataFrame(columns=[
+        "instance_id",
+        "question",
+        "database_used",
+        "input_tokens",
+        "output_tokens",
+        "sql_generation_time",
+        "status",
+        "error_message",
+        "generated_sql",
+        "schema_extraction_prompt",
+        "sql_generation_prompt"
+    ])
+    
+    # Save initial Excel file
+    with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
+        initial_data.to_excel(writer, sheet_name='Metrics', index=False)
+    
+    print(f"📊 Created metrics file: {excel_filename}")
 
     # 0. Initialize clients
     client, model = init_clients()
@@ -199,9 +295,10 @@ if __name__ == "__main__":
                 print(f"Skipping line due to JSON error: {e}")
                 continue
 
-            # Extract question and instance_id
+            # Extract question, instance_id, and database
             question = item.get("question", "")
             instance_id = item.get("instance_id", "")
+            database = item.get("db", "unknown")
             # evidence = item.get("evidence", "")
 
             if not question or not instance_id:
@@ -209,31 +306,96 @@ if __name__ == "__main__":
                 continue
 
             print(f"\nProcessing instance_id: {instance_id}")
+            
+            # Initialize metrics for this instance
+            instance_metrics = {
+                "instance_id": instance_id,
+                "question": question,
+                "schema_extraction_prompt": "",
+                "sql_generation_prompt": "",
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "sql_generation_time": 0,
+                "database_used": database,
+                "status": "success",
+                "error_message": "",
+                "generated_sql": ""
+            }
+            
             try:
+                # Start timing
+                start_time = time.time()
+                
                 # 1. Retrieve relevant table metadata from Weaviate
                 tables_metadata = retrieve_tables(client, question)
                 if not tables_metadata:
+                    instance_metrics["status"] = "error"
+                    instance_metrics["error_message"] = "No relevant tables found in Weaviate"
+                    # Update Excel file incrementally
+                    append_to_excel(excel_filename, instance_metrics)
                     print(f"❌ ERROR: No relevant tables found in Weaviate for instance_id {instance_id}. Skipping.")
                     continue
 
                 # 2. Use LLM to extract the precise schema needed
-                filtered_schema, _ = extract_used_schema(model, question, tables_metadata, return_prompt=True)
+                filtered_schema, schema_prompt, schema_tokens = extract_used_schema(model, question, tables_metadata, return_prompt=True)
+                instance_metrics["schema_extraction_prompt"] = schema_prompt
+                
+                # Accumulate tokens
+                instance_metrics["input_tokens"] += schema_tokens.get("prompt_tokens", 0)
+                instance_metrics["output_tokens"] += schema_tokens.get("completion_tokens", 0)
+                
                 if not filtered_schema:
+                    instance_metrics["status"] = "error"
+                    instance_metrics["error_message"] = "LLM could not determine a schema"
+                    # Update Excel file incrementally
+                    append_to_excel(excel_filename, instance_metrics)
                     print(f"❌ ERROR: LLM could not determine a schema for instance_id {instance_id}. Skipping.")
                     continue
 
                 # 3. Generate SQL based on the filtered schema
                 all_meta_strings = [t['metadata_information'] for t in tables_metadata]
-                sql_script, _ = generate_sql(model, question, filtered_schema, all_meta_strings, return_prompt=True)
+                sql_script, sql_prompt, sql_tokens = generate_sql(model, question, filtered_schema, all_meta_strings, return_prompt=True)
                 sql_script = sql_script.strip()
+                
+                # End timing
+                end_time = time.time()
+                
+                instance_metrics["sql_generation_prompt"] = sql_prompt
+                
+                # Accumulate tokens for final total
+                instance_metrics["input_tokens"] += sql_tokens.get("prompt_tokens", 0)
+                instance_metrics["output_tokens"] += sql_tokens.get("completion_tokens", 0)
+                instance_metrics["sql_generation_time"] = round(end_time - start_time, 2)
+                instance_metrics["generated_sql"] = sql_script
 
                 # 4. Write the SQL to the output file
                 output_path = os.path.join(output_dir, f"{instance_id}.sql")
                 with open(output_path, "w") as out_f:
                     out_f.write(sql_script + "\n")
                 print(f"✅ SQL written to {output_path}")
+                
+                # Update Excel file incrementally
+                append_to_excel(excel_filename, instance_metrics)
 
             except Exception as e:
+                instance_metrics["status"] = "error"
+                instance_metrics["error_message"] = str(e)
+                # Update Excel file incrementally
+                append_to_excel(excel_filename, instance_metrics)
                 print(f"FATAL ERROR for instance_id {instance_id}: {e}")
 
-    print("All SQL files written to spider_sqls/")
+    # Final summary
+    print(f"\n✅ All SQL files written to {output_dir}/")
+    print(f"✅ Metrics continuously saved to {excel_filename}")
+    
+    # Read final metrics for summary
+    final_df = pd.read_excel(excel_filename)
+    print(f"\nSummary:")
+    print(f"- Total instances processed: {len(final_df)}")
+    print(f"- Successful: {len(final_df[final_df['status'] == 'success'])}")
+    print(f"- Errors: {len(final_df[final_df['status'] == 'error'])}")
+    if len(final_df) > 0:
+        avg_time = final_df['sql_generation_time'].mean()
+        print(f"- Average SQL generation time: {avg_time:.2f} seconds")
+        print(f"- Total input tokens: {final_df['input_tokens'].sum():,}")
+        print(f"- Total output tokens: {final_df['output_tokens'].sum():,}")
